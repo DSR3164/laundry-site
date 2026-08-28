@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Стиральные машины</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #fff;
+      background: #111113;
+      overflow-x: hidden;
+    }
+
+    h1 {
+      position: relative;
+      z-index: 1;
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      margin-bottom: 6px;
+      text-shadow: 0 2px 12px rgba(0,0,0,0.4);
+    }
+
+    #status {
+      position: relative;
+      z-index: 1;
+      font-size: 0.78rem;
+      color: rgba(255,255,255,0.45);
+      margin-bottom: 32px;
+    }
+
+    #machines {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: center;
+      width: 100%;
+      max-width: 720px;
+    }
+
+    .machine-card {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      padding: 18px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      width: 118px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .machine-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .machine-name {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.5);
+      text-align: center;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .circle-wrap {
+      position: relative;
+      width: 72px;
+      height: 72px;
+    }
+
+    .circle-wrap canvas {
+      display: block;
+    }
+
+    .circle-label {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: #fff;
+      pointer-events: none;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    }
+
+    .machine-status {
+      font-size: 0.7rem;
+      text-align: center;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .status-free  { color: #4ade80; }
+    .status-busy  { color: #fb923c; }
+    .status-error { color: #f87171; }
+
+    #error-msg {
+      position: relative;
+      z-index: 1;
+      color: #f87171;
+      font-size: 0.82rem;
+      margin-top: 16px;
+      display: none;
+      background: rgba(248,113,113,0.1);
+      border: 1px solid rgba(248,113,113,0.25);
+      backdrop-filter: blur(8px);
+      border-radius: 10px;
+      padding: 10px 16px;
+      max-width: 360px;
+      text-align: center;
+    }
+
+    #refresh-btn {
+      position: relative;
+      z-index: 1;
+      margin-top: 32px;
+      padding: 10px 28px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      color: #fff;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      letter-spacing: 0.03em;
+      transition: background 0.2s, transform 0.15s;
+    }
+    #refresh-btn:hover {
+      background: rgba(255, 255, 255, 0.18);
+      transform: translateY(-1px);
+    }
+    #refresh-btn:active {
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+<h1>Стиральные машины</h1>
+<div id="status">Загрузка…</div>
+<div id="machines"></div>
+<div id="error-msg"></div>
+<button id="refresh-btn" onclick="loadMachines()">Обновить</button>
+
+<script>
+const WORKER_URL = "https://laundry-proxy.denishklyaev.workers.dev";
+
+async function loadMachines() {
+  const statusEl   = document.getElementById("status");
+  const machinesEl = document.getElementById("machines");
+  const errorEl    = document.getElementById("error-msg");
+
+  statusEl.textContent  = "Загрузка…";
+  errorEl.style.display = "none";
+  machinesEl.innerHTML  = "";
+
+  try {
+    const res = await fetch(WORKER_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const machines = await res.json();
+    if (machines.error) throw new Error(machines.error);
+    render(machines);
+    statusEl.textContent = `Обновлено: ${new Date().toLocaleTimeString("ru-RU")}`;
+  } catch (err) {
+    statusEl.textContent  = "Ошибка загрузки";
+    errorEl.textContent   = String(err);
+    errorEl.style.display = "block";
+  }
+}
+
+function drawCircle(canvas, progress, colorStroke, colorFill) {
+  const size = canvas.width;
+  const ctx  = canvas.getContext("2d");
+  const cx   = size / 2;
+  const cy   = size / 2;
+  const r    = size / 2 - 5;
+
+  ctx.clearRect(0, 0, size, size);
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = colorFill;
+  ctx.fill();
+
+  if (progress > 0) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * progress);
+    ctx.strokeStyle = colorStroke;
+    ctx.lineWidth   = 4;
+    ctx.lineCap     = "round";
+    ctx.stroke();
+  }
+}
+
+function render(machines) {
+  const container = document.getElementById("machines");
+  container.innerHTML = "";
+
+  machines.forEach((m) => {
+    const isFree  = m.status === "Выключена" || m.status === "Свободна";
+    const isError = m.status === "Ошибка";
+
+    let progress = 0;
+    if (m.timeToEnd) {
+      const parts = m.timeToEnd.split(":").map(Number);
+      const mins  = (parts[0] || 0) * 60 + (parts[1] || 0);
+      progress = Math.max(0, Math.min(1, mins / (mins > 60 ? 120 : 60)));
+    }
+
+    let strokeColor, fillColor;
+    if (isFree) {
+      strokeColor = "#4ade80";
+      fillColor   = "#22c55e";
+    } else if (isError) {
+      strokeColor = "#f87171";
+      fillColor   = "#ef4444";
+    } else {
+      strokeColor = "#fb923c";
+      fillColor   = "rgba(255,255,255,0.08)";
+    }
+
+    const card = document.createElement("div");
+    card.className = "machine-card";
+
+    const name = document.createElement("div");
+    name.className = "machine-name";
+    name.textContent = m.deviceNumber || m.name || `#${m.deviceNumberNum ?? "?"}`;
+    card.appendChild(name);
+
+    const wrap = document.createElement("div");
+    wrap.className = "circle-wrap";
+
+    const canvas = document.createElement("canvas");
+    canvas.width  = 72;
+    canvas.height = 72;
+    drawCircle(canvas, progress, strokeColor, fillColor);
+    wrap.appendChild(canvas);
+
+    const label = document.createElement("div");
+    label.className   = "circle-label";
+    label.textContent = m.timeToEnd || "";
+    wrap.appendChild(label);
+
+    card.appendChild(wrap);
+
+    const statusDiv = document.createElement("div");
+    statusDiv.className = "machine-status " +
+      (isFree ? "status-free" : isError ? "status-error" : "status-busy");
+    const statusLabel = (m.status === "Выключена") ? "Свободна" : (m.status || "—");
+    statusDiv.textContent = statusLabel;
+    card.appendChild(statusDiv);
+
+    container.appendChild(card);
+  });
+}
+
+loadMachines();
+</script>
+
+</body>
+</html>
